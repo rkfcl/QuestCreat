@@ -1,0 +1,4 @@
+name: QuestCreate
+version: '${project.version}'
+main: questcreate.questcreate.QuestCreate
+api-version: 1.19
