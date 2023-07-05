@@ -1,9 +1,5 @@
 package questcreate.questcreate;
 
-
-
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -133,7 +129,6 @@ public final class QuestCreate extends JavaPlugin implements Listener {
                 fadeOut                    // 페이드아웃 시간 (틱 단위, 20틱 = 1초)
         );
     }
-
     private void giveRandomQuest(Player player) {
         UUID playerId = player.getUniqueId();
         ConfigurationSection playerQuestSection = playerQuestConfig.getConfigurationSection(playerId.toString());
@@ -144,7 +139,6 @@ public final class QuestCreate extends JavaPlugin implements Listener {
                 return;
             }
         }
-
         // 설정된 퀘스트 목록에서 랜덤하게 퀘스트를 선택합니다
         if (!questList.isEmpty()) {
             Random random = new Random();
@@ -162,11 +156,9 @@ public final class QuestCreate extends JavaPlugin implements Listener {
                         }
                     }
                 }
-
                 if (hasQuest) {
                     return;
                 }
-
                 // 퀘스트 받는 소리
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f);
                 int amount = quest.getAmount();
@@ -192,26 +184,21 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             player.sendMessage("§c퀘스트를 준비 중입니다. 잠시 후 다시 시도해주세요.");
         }
     }
-
-
-
-
-    private void saveQuestList() {
-        // 퀘스트 목록을 quests.yml 파일에 저장합니다
-        questConfig.set("quests", null);
-        for (Quest quest : questList) {
-            ConfigurationSection questSection = questConfig.createSection("quests." + quest.getName());
-            questSection.set("item", quest.getItem().name());
-            questSection.set("amount", quest.getAmount());
-        }
-
-        try {
-            questConfig.save(questFile);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
+//    private void saveQuestList() {
+//        // 퀘스트 목록을 quests.yml 파일에 저장합니다
+//        questConfig.set("quests", null);
+//        for (Quest quest : questList) {
+//            ConfigurationSection questSection = questConfig.createSection("quests." + quest.getName());
+//            questSection.set("item", quest.getItem().name());
+//            questSection.set("amount", quest.getAmount());
+//        }
+//
+//        try {
+//            questConfig.save(questFile);
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//    }
     private void loadQuestList() {
         // quests.yml 파일에서 퀘스트 목록을 로드합니다
         ConfigurationSection questsSection = questConfig.getConfigurationSection("quests");
@@ -232,7 +219,6 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             }
         }
     }
-
     private void savePlayerQuests() {
         // 플레이어 퀘스트 진행 상황을 playerQuest.yml 파일에 저장합니다
         try {
@@ -273,7 +259,6 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         }
         player.openInventory(inventory);
     }
-
     private void setItem(Inventory inventory, int slot, ItemStack item) {
         inventory.setItem(slot, item);
     }
@@ -286,7 +271,6 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         }
         return count;
     }
-
     @EventHandler
     public void ShopMenuInventory(InventoryClickEvent event) {
         Inventory inventory = event.getClickedInventory();
@@ -305,7 +289,6 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             }
         }
     }
-
     public void resetPlayerQuestsAtMidnight() {
         // 현재 시간을 계산합니다
         Calendar calendar = Calendar.getInstance();
@@ -326,9 +309,6 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             resetPlayerQuestFile();
         }, ((calendar.getTimeInMillis() - System.currentTimeMillis())/1000*20), 86400000L); // 매일 자정마다 실행 (24시간 간격)
     }
-
-
-
     public void resetPlayerQuestFile() {
         File playerQuestFile = new File(getDataFolder(), "playerQuest.yml");
         if (playerQuestFile.exists()) {
