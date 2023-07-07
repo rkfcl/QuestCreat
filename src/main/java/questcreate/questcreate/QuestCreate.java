@@ -38,7 +38,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         getLogger().info("퀘스트 플러그인 작동");
-        resetPlayerQuestsAtMidnight();
+        resetPlayerQuestsAtSpecificTime();
         // 플러그인 활성화 시에 실행될 로직
         getServer().getPluginManager().registerEvents(this, this);
         questList = new ArrayList<>();
@@ -73,7 +73,6 @@ public final class QuestCreate extends JavaPlugin implements Listener {
 //        saveQuestList();
         savePlayerQuests();
     }
-
     @EventHandler
     public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
         Player player = event.getPlayer();
@@ -289,26 +288,29 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             }
         }
     }
-    public void resetPlayerQuestsAtMidnight() {
-        // 현재 시간을 계산합니다
-        Calendar calendar = Calendar.getInstance();
-        calendar.setTime(new Date());
-        int currentHour = calendar.get(Calendar.HOUR_OF_DAY);
+    public void resetPlayerQuestsAtSpecificTime() {
+        // 설정한 시간
+        Calendar resetTime = Calendar.getInstance();
+        resetTime.set(Calendar.HOUR_OF_DAY, 4);
+        resetTime.set(Calendar.MINUTE, 50);
+        resetTime.set(Calendar.SECOND, 0);
 
-        // 다음 날 0시 0분을 설정합니다
-        calendar.add(Calendar.DAY_OF_MONTH, 1);
-        calendar.set(Calendar.HOUR_OF_DAY, 0);
-        calendar.set(Calendar.MINUTE, 0);
-        calendar.set(Calendar.SECOND, 0);
-        System.out.println(calendar.getTimeInMillis() - System.currentTimeMillis());
-        // 예약된 시간에 실행될 작업을 예약합니다
+        // 예약된 시간에 작업을 실행할 수 있도록 예약
         BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
         scheduler.scheduleSyncRepeatingTask(this, () -> {
-            // 플레이어 퀘스트 목록을 초기화합니다
-            getLogger().info("퀘스트 초기화!");
-            resetPlayerQuestFile();
-        }, ((calendar.getTimeInMillis() - System.currentTimeMillis())/1000*20), 86400000L); // 매일 자정마다 실행 (24시간 간격)
+            // 현재 시간과 설정한 시간 비교
+            Calendar now = Calendar.getInstance();
+            if (now.after(resetTime)) {
+                getLogger().info("퀘스트 초기화!");
+                resetPlayerQuestFile();
+                // 작업을 한 번 실행한 후 스케줄링 종료
+                scheduler.cancelTasks(this);
+            }
+        }, 0L, 1200L); // 1초마다 작동
     }
+
+
+
     public void resetPlayerQuestFile() {
         File playerQuestFile = new File(getDataFolder(), "playerQuest.yml");
         if (playerQuestFile.exists()) {
