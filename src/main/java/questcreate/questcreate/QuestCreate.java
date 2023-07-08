@@ -289,10 +289,10 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         }
     }
     public void resetPlayerQuestsAtSpecificTime() {
-        // 설정한 시간
+        // 설정한 시간 (다음 날 00시)
         Calendar resetTime = Calendar.getInstance();
-        resetTime.set(Calendar.HOUR_OF_DAY, 4);
-        resetTime.set(Calendar.MINUTE, 50);
+        resetTime.set(Calendar.HOUR_OF_DAY, 0);
+        resetTime.set(Calendar.MINUTE, 0);
         resetTime.set(Calendar.SECOND, 0);
 
         // 예약된 시간에 작업을 실행할 수 있도록 예약
@@ -300,7 +300,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         scheduler.scheduleSyncRepeatingTask(this, () -> {
             // 현재 시간과 설정한 시간 비교
             Calendar now = Calendar.getInstance();
-            if (now.after(resetTime)) {
+            if (now.getTimeInMillis() <= resetTime.getTimeInMillis()) {
                 getLogger().info("퀘스트 초기화!");
                 resetPlayerQuestFile();
                 // 작업을 한 번 실행한 후 스케줄링 종료
@@ -308,6 +308,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             }
         }, 0L, 1200L); // 1초마다 작동
     }
+
 
 
 
