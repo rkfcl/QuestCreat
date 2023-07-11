@@ -22,6 +22,7 @@ import org.bukkit.scheduler.BukkitScheduler;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 public final class QuestCreate extends JavaPlugin implements Listener {
@@ -289,25 +290,23 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         }
     }
     public void resetPlayerQuestsAtSpecificTime() {
-        // 설정한 시간 (다음 날 00시)
-        Calendar resetTime = Calendar.getInstance();
-        resetTime.set(Calendar.HOUR_OF_DAY, 0);
-        resetTime.set(Calendar.MINUTE, 0);
-        resetTime.set(Calendar.SECOND, 0);
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            // 현재 시간을 가져옵니다.
+            Date now = new Date();
 
-        // 예약된 시간에 작업을 실행할 수 있도록 예약
-        BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
-        scheduler.scheduleSyncRepeatingTask(this, () -> {
-            // 현재 시간과 설정한 시간 비교
-            Calendar now = Calendar.getInstance();
-            if (now.getTimeInMillis() <= resetTime.getTimeInMillis()) {
-                getLogger().info("퀘스트 초기화!");
+            // 현재 시간을 분 단위로 변환합니다.
+            SimpleDateFormat format = new SimpleDateFormat("HH:mm");
+            String currentTime = format.format(now);
+            int currentMinute = Integer.parseInt(currentTime.split(":")[1]);
+
+            // 00:00에서 00:01 사이인지 확인합니다.
+            if (currentMinute >= 0 && currentMinute <= 1) {
                 resetPlayerQuestFile();
-                // 작업을 한 번 실행한 후 스케줄링 종료
-                scheduler.cancelTasks(this);
             }
-        }, 0L, 1200L); // 1초마다 작동
+        }, 0L, 20 * 60L); // 1분(60초)마다 작업을 실행합니다.
     }
+
+
 
 
 
