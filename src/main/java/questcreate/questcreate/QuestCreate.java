@@ -300,7 +300,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             int currentMinute = Integer.parseInt(currentTime.split(":")[1]);
 
             // 00:00에서 00:01 사이인지 확인합니다.
-            if (currentMinute >= 0 && currentMinute <= 1) {
+            if (currentMinute >= 0 && currentMinute < 1) {
                 resetPlayerQuestFile();
             }
         }, 0L, 20 * 60L); // 1분(60초)마다 작업을 실행합니다.
