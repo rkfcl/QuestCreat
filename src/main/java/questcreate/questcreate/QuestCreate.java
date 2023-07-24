@@ -4,6 +4,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -17,6 +19,7 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 
@@ -31,11 +34,13 @@ public final class QuestCreate extends JavaPlugin implements Listener {
     private File questFile;
     private File playerQuestFile;
     private List<Quest> questList;
+    private List<Quest> weeklyQuestList;
     private static QuestCreate instance;
 
     public static QuestCreate getInstance() {
         return instance;
     }
+
     @Override
     public void onEnable() {
         getLogger().info("퀘스트 플러그인 작동");
@@ -43,6 +48,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         // 플러그인 활성화 시에 실행될 로직
         getServer().getPluginManager().registerEvents(this, this);
         questList = new ArrayList<>();
+        weeklyQuestList = new ArrayList<>();
         questFile = new File(getDataFolder(), "quests.yml");
         playerQuestFile = new File(getDataFolder(), "playerQuest.yml");
 
@@ -71,8 +77,15 @@ public final class QuestCreate extends JavaPlugin implements Listener {
     public void onDisable() {
         // 플러그인 비활성화 시에 실행될 로직
         getLogger().info("퀘스트 플러그인 종료");
-//        saveQuestList();
         savePlayerQuests();
+    }
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (command.getName().equalsIgnoreCase("퀘스트초기화")) {
+            resetPlayerQuestFile();
+            return true;
+        }
+        return false;
     }
     @EventHandler
     public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
@@ -82,65 +95,56 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             String villagerName = villager.getCustomName();
 
             if (villagerName != null && villagerName.equals("일일퀘스트")) {
-                boolean check = true;
-                // 퀘스트 완료 보상
-                ConfigurationSection playerQuestSection = playerQuestConfig.getConfigurationSection(player.getUniqueId().toString());
-                if (playerQuestSection != null) {
-                    for (String questId : playerQuestSection.getKeys(false)) {
-                        ConfigurationSection questSection = playerQuestSection.getConfigurationSection(questId);
-                        if (questSection != null) {
-                            String questName = questSection.getString("quest");
-                            String itemString = questSection.getString("item");
-                            Material layeritemcount = Material.getMaterial(itemString);
-                            int itemCount = countItems(player.getInventory(), layeritemcount);
-                            int amount = questSection.getInt("amount");
-                            boolean progress = questSection.getBoolean("progress");
-                            if (itemCount >= amount) {
-                                if (!progress) {
-                                    // 일정 개수만큼 아이템 제거
-                                    player.getInventory().removeItem(new ItemStack(layeritemcount, amount));
-                                    Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "iagive " + player.getName() + " protectblock:rkfcl_coin " + 1);
-                                    questSection.set("progress", true);
-                                    savePlayerQuests();
-                                    player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
-                                    check =false;
-                                    sendTitle(player, "퀘스트 완료", "§a[ 일일 퀘스트 ] §f" + questName + " §a완료!", 10, 70, 10);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 여기에 플레이어에게 퀘스트를 부여하는 로직을 구현합니다
-                if (check) {
-                    giveRandomQuest(player);
-                }
+                handleDailyQuestInteraction(player);
+            } else if (villagerName != null && villagerName.equals("주간퀘스트")) {
+                handleWeeklyQuestInteraction(player);
             }
         }
     }
 
-    private void sendTitle(Player player, String title, String subTitle, int fadeIn, int stay, int fadeOut) {
-        player.sendTitle(
-                ChatColor.BOLD + title,     // 타이틀 텍스트
-                ChatColor.BOLD + subTitle,  // 타이틀 서브텍스트 (크고 굵은 텍스트로 표시됨)
-                fadeIn,                    // 페이드인 시간 (틱 단위, 20틱 = 1초)
-                stay,                      // 표시 시간 (틱 단위, 20틱 = 1초)
-                fadeOut                    // 페이드아웃 시간 (틱 단위, 20틱 = 1초)
-        );
-    }
-    private void giveRandomQuest(Player player) {
+    private void handleDailyQuestInteraction(Player player) {
         UUID playerId = player.getUniqueId();
         ConfigurationSection playerQuestSection = playerQuestConfig.getConfigurationSection(playerId.toString());
+        boolean check = true;
         if (playerQuestSection != null) {
-            int currentQuestCount = playerQuestSection.getKeys(false).size();
-            if (currentQuestCount >= 3) {
+            int currentDailyQuestCount = 0;
+
+            for (String questId : playerQuestSection.getKeys(false)) {
+                if (questId.startsWith("daily_quest")) {
+                    ConfigurationSection questSection = playerQuestSection.getConfigurationSection(questId);
+                    if (questSection != null) {
+                        String questName = questSection.getString("quest");
+                        String itemString = questSection.getString("item");
+                        Material layeritemcount = Material.getMaterial(itemString);
+                        int itemCount = countItems(player.getInventory(), layeritemcount);
+                        int amount = questSection.getInt("amount");
+                        boolean progress = questSection.getBoolean("progress");
+                        if (itemCount >= amount) {
+                            if (!progress) {
+                                // 일정 개수만큼 아이템 제거
+                                player.getInventory().removeItem(new ItemStack(layeritemcount, amount));
+                                Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "iagive " + player.getName() + " protectblock:rkfcl_coin " + 1);
+                                questSection.set("progress", true);
+                                savePlayerQuests();
+                                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
+                                sendTitle(player, "퀘스트 완료", "§a[ 일일 퀘스트 ] §f" + questName + " §a완료!", 10, 70, 10);
+                                check=false;
+                                break;
+                            }
+                        }
+                    }
+                    currentDailyQuestCount++;
+                }
+            }
+
+            if (currentDailyQuestCount >= 3) {
                 player.sendMessage("§c일일퀘스트는 하루에 3개까지 받을 수 있습니다.");
                 return;
             }
         }
+
         // 설정된 퀘스트 목록에서 랜덤하게 퀘스트를 선택합니다
-        if (!questList.isEmpty()) {
+        if (!questList.isEmpty()&&check) {
             Random random = new Random();
             int randomIndex = random.nextInt(questList.size());
             Quest quest = questList.get(randomIndex);
@@ -157,8 +161,10 @@ public final class QuestCreate extends JavaPlugin implements Listener {
                     }
                 }
                 if (hasQuest) {
+                    player.sendMessage("§c퀘스트를 준비 중입니다. 잠시 후 다시 시도해주세요.");
                     return;
                 }
+
                 // 퀘스트 받는 소리
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f);
                 int amount = quest.getAmount();
@@ -171,7 +177,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
                 if (playerQuestSection == null) {
                     playerQuestSection = playerQuestConfig.createSection(playerId.toString());
                 }
-                String questId = "quest" + (playerQuestSection.getKeys(false).size() + 1);
+                String questId = "daily_quest" + (playerQuestSection.getKeys(false).size() + 1);
                 playerQuestSection.set(questId + ".quest", quest.getName());
                 playerQuestSection.set(questId + ".item", quest.getItem().name());
                 playerQuestSection.set(questId + ".amount", amount);
@@ -180,45 +186,148 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             } else {
                 player.sendMessage("§c퀘스트를 준비 중입니다. 잠시 후 다시 시도해주세요.");
             }
-        } else {
-            player.sendMessage("§c퀘스트를 준비 중입니다. 잠시 후 다시 시도해주세요.");
         }
     }
-//    private void saveQuestList() {
-//        // 퀘스트 목록을 quests.yml 파일에 저장합니다
-//        questConfig.set("quests", null);
-//        for (Quest quest : questList) {
-//            ConfigurationSection questSection = questConfig.createSection("quests." + quest.getName());
-//            questSection.set("item", quest.getItem().name());
-//            questSection.set("amount", quest.getAmount());
-//        }
-//
-//        try {
-//            questConfig.save(questFile);
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-//    }
+
+
+    private void handleWeeklyQuestInteraction(Player player) {
+        UUID playerId = player.getUniqueId();
+        ConfigurationSection playerQuestSection = playerQuestConfig.getConfigurationSection(playerId.toString());
+        boolean check = true;
+        if (playerQuestSection != null) {
+            int currentWeeklyQuestCount = 0;
+
+            for (String questId : playerQuestSection.getKeys(false)) {
+                if (questId.startsWith("weekly_quest")) {
+                    ConfigurationSection questSection = playerQuestSection.getConfigurationSection(questId);
+                    if (questSection != null) {
+                        String questName = questSection.getString("quest");
+                        String itemString = questSection.getString("item");
+                        Material layeritemcount = Material.getMaterial(itemString);
+                        int itemCount = countItems(player.getInventory(), layeritemcount);
+                        int amount = questSection.getInt("amount");
+                        boolean progress = questSection.getBoolean("progress");
+                        if (itemCount >= amount) {
+                            if (!progress) {
+                                // 일정 개수만큼 아이템 제거
+                                player.getInventory().removeItem(new ItemStack(layeritemcount, amount));
+                                Bukkit.getServer().dispatchCommand(Bukkit.getConsoleSender(), "iagive " + player.getName() + " protectblock:rkfcl_coin " + 5);
+                                questSection.set("progress", true);
+                                savePlayerQuests();
+                                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
+                                sendTitle(player, "퀘스트 완료", "§a[ 주간 퀘스트 ] §f" + questName + " §a완료!", 10, 70, 10);
+                                check=false;
+                                break;
+                            }
+                        }
+                    }
+                    currentWeeklyQuestCount++;
+                }
+                
+            }
+
+            if (currentWeeklyQuestCount >= 3) {
+                player.sendMessage("§c주간퀘스트는 주에 3개까지 받을 수 있습니다.");
+                return;
+            }
+        }
+
+        // 설정된 주간 퀘스트 목록에서 랜덤하게 퀘스트를 선택합니다
+        if (!weeklyQuestList.isEmpty()&&check) {
+            Random random = new Random();
+            int randomIndex = random.nextInt(weeklyQuestList.size());
+            Quest quest = weeklyQuestList.get(randomIndex);
+            if (quest != null) {
+                // 이미 플레이어가 해당 퀘스트를 가지고 있는지 확인합니다
+                boolean hasQuest = false;
+                if (playerQuestSection != null) {
+                    for (String questId : playerQuestSection.getKeys(false)) {
+                        String questName = playerQuestSection.getString(questId + ".quest");
+                        if (questName != null && questName.equals(quest.getName())) {
+                            hasQuest = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasQuest) {
+                    player.sendMessage("§c퀘스트를 준비 중입니다. 잠시 후 다시 시도해주세요.");
+                    return;
+                }
+
+                // 퀘스트 받는 소리
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.0f);
+                int amount = quest.getAmount();
+                player.sendMessage("§a퀘스트를 받았습니다!");
+                player.sendMessage("§a[ 주간 퀘스트 ] §f" + quest.getName() + " " + amount + "개를 구해와");
+                player.sendMessage("§7주간퀘스트는 주에 3개까지 받을 수 있습니다.");
+
+                // 플레이어 퀘스트 진행 상황을 저장합니다
+                playerQuestSection = playerQuestConfig.getConfigurationSection(playerId.toString());
+                if (playerQuestSection == null) {
+                    playerQuestSection = playerQuestConfig.createSection(playerId.toString());
+                }
+                String questId = "weekly_quest" + (playerQuestSection.getKeys(false).size() + 1);
+                playerQuestSection.set(questId + ".quest", quest.getName());
+                playerQuestSection.set(questId + ".item", quest.getItem().name());
+                playerQuestSection.set(questId + ".amount", amount);
+                playerQuestSection.set(questId + ".progress", false);
+                savePlayerQuests();
+            } else {
+                player.sendMessage("§c퀘스트를 준비 중입니다. 잠시 후 다시 시도해주세요.");
+            }
+        }
+    }
+
+    private void sendTitle(Player player, String title, String subTitle, int fadeIn, int stay, int fadeOut) {
+        player.sendTitle(
+                ChatColor.BOLD + title,     // 타이틀 텍스트
+                ChatColor.BOLD + subTitle,  // 타이틀 서브텍스트 (크고 굵은 텍스트로 표시됨)
+                fadeIn,                    // 페이드인 시간 (틱 단위, 20틱 = 1초)
+                stay,                      // 표시 시간 (틱 단위, 20틱 = 1초)
+                fadeOut                    // 페이드아웃 시간 (틱 단위, 20틱 = 1초)
+        );
+    }
+
     private void loadQuestList() {
-        // quests.yml 파일에서 퀘스트 목록을 로드합니다
-        ConfigurationSection questsSection = questConfig.getConfigurationSection("quests");
-        if (questsSection != null) {
-            for (String questName : questsSection.getKeys(false)) {
-                ConfigurationSection questSection = questsSection.getConfigurationSection(questName);
+        ConfigurationSection dailyQuestsSection = questConfig.getConfigurationSection("daily_quests");
+        if (dailyQuestsSection != null) {
+            for (String questName : dailyQuestsSection.getKeys(false)) {
+                ConfigurationSection questSection = dailyQuestsSection.getConfigurationSection(questName);
                 if (questSection != null) {
                     String itemName = questSection.getString("item");
                     int amount = questSection.getInt("amount");
                     if (itemName != null) {
                         Material item = Material.getMaterial(itemName);
                         if (item != null) {
-                            Quest quest = new Quest(questName, item, amount);
-                            questList.add(quest);
+                            // 일일 퀘스트로 추가
+                            Quest dailyQuest = new Quest(questName, item, amount);
+                            questList.add(dailyQuest);
+                        }
+                    }
+                }
+            }
+        }
+
+        ConfigurationSection weeklyQuestsSection = questConfig.getConfigurationSection("weekly_quests");
+        if (weeklyQuestsSection != null) {
+            for (String questName : weeklyQuestsSection.getKeys(false)) {
+                ConfigurationSection questSection = weeklyQuestsSection.getConfigurationSection(questName);
+                if (questSection != null) {
+                    String itemName = questSection.getString("item");
+                    int amount = questSection.getInt("amount");
+                    if (itemName != null) {
+                        Material item = Material.getMaterial(itemName);
+                        if (item != null) {
+                            // 주간 퀘스트로 추가
+                            Quest weeklyQuest = new Quest(questName, item, amount);
+                            weeklyQuestList.add(weeklyQuest);
                         }
                     }
                 }
             }
         }
     }
+
     private void savePlayerQuests() {
         // 플레이어 퀘스트 진행 상황을 playerQuest.yml 파일에 저장합니다
         try {
@@ -227,13 +336,26 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             e.printStackTrace();
         }
     }
+
     public void playerQuestList(Player player) {
         Inventory inventory = Bukkit.createInventory(null, 9, "퀘스트");
 
         UUID playerId = player.getUniqueId();
         ConfigurationSection playerQuestSection = playerQuestConfig.getConfigurationSection(playerId.toString());
         if (playerQuestSection != null) {
+            List<String> dailyQuestIds = new ArrayList<>();
+            List<String> weeklyQuestIds = new ArrayList<>();
+
             for (String questId : playerQuestSection.getKeys(false)) {
+                if (questId.startsWith("daily_quest")) {
+                    dailyQuestIds.add(questId);
+                } else if (questId.startsWith("weekly_quest")) {
+                    weeklyQuestIds.add(questId);
+                }
+            }
+
+            // 일일 퀘스트를 먼저 추가
+            for (String questId : dailyQuestIds) {
                 ConfigurationSection questSection = playerQuestSection.getConfigurationSection(questId);
                 if (questSection != null) {
                     String questName = questSection.getString("quest");
@@ -242,15 +364,38 @@ public final class QuestCreate extends JavaPlugin implements Listener {
                     int itemCount = countItems(player.getInventory(), layeritemcount);
                     int amount = questSection.getInt("amount");
                     boolean progress = questSection.getBoolean("progress");
-                    String book = progress ? "ENCHANTED_BOOK" : "BOOK";
-                    Material item = Material.getMaterial(book);
+                    Material item = Material.getMaterial(progress ? "ENCHANTED_BOOK" : "BOOK");
                     if (item != null) {
                         ItemStack questItem = new ItemStack(item, 1);
                         ItemMeta meta = questItem.getItemMeta();
                         String progressStat = progress ? "§6[완료]" : "§a[진행중]";
-                        String progresscount = progress ? "§7§m" : "§f";
-                        meta.setDisplayName("§a[ 일일 퀘스트 ] §f"+questName + " " + progressStat);
-                        meta.setLore(Arrays.asList(progresscount+itemCount+ " / "+amount));
+                        String progressCount = progress ? "§7§m" : "§f";
+                        meta.setDisplayName("§a[ 일일 퀘스트 ] §f" + questName + " " + progressStat);
+                        meta.setLore(Collections.singletonList(progressCount + itemCount + " / " + amount));
+                        questItem.setItemMeta(meta);
+                        setItem(inventory, inventory.firstEmpty(), questItem);
+                    }
+                }
+            }
+
+            // 주간 퀘스트를 추가
+            for (String questId : weeklyQuestIds) {
+                ConfigurationSection questSection = playerQuestSection.getConfigurationSection(questId);
+                if (questSection != null) {
+                    String questName = questSection.getString("quest");
+                    String itemString = questSection.getString("item");
+                    Material layeritemcount = Material.getMaterial(itemString);
+                    int itemCount = countItems(player.getInventory(), layeritemcount);
+                    int amount = questSection.getInt("amount");
+                    boolean progress = questSection.getBoolean("progress");
+                    Material item = Material.getMaterial(progress ? "ENCHANTED_BOOK" : "BOOK");
+                    if (item != null) {
+                        ItemStack questItem = new ItemStack(item, 1);
+                        ItemMeta meta = questItem.getItemMeta();
+                        String progressStat = progress ? "§6[완료]" : "§a[진행중]";
+                        String progressCount = progress ? "§7§m" : "§f";
+                        meta.setDisplayName("§a[ 주간 퀘스트 ] §f" + questName + " " + progressStat);
+                        meta.setLore(Collections.singletonList(progressCount + itemCount + " / " + amount));
                         questItem.setItemMeta(meta);
                         setItem(inventory, inventory.firstEmpty(), questItem);
                     }
@@ -259,9 +404,12 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         }
         player.openInventory(inventory);
     }
+
+
     private void setItem(Inventory inventory, int slot, ItemStack item) {
         inventory.setItem(slot, item);
     }
+
     private int countItems(Inventory inventory, Material itemType) {
         int count = 0;
         for (ItemStack itemStack : inventory.getContents()) {
@@ -271,6 +419,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         }
         return count;
     }
+
     @EventHandler
     public void ShopMenuInventory(InventoryClickEvent event) {
         Inventory inventory = event.getClickedInventory();
@@ -284,11 +433,15 @@ public final class QuestCreate extends JavaPlugin implements Listener {
                 // 클릭한 인벤토리가 플레이어 인벤토리인 경우
                 event.setCancelled(true); // 이벤트 취소하여 아이템을 메뉴로 옮기지 못하도록 함
             }
-            if (event.getSlot() == 15){
+            if (event.getSlot() == 15) {
                 playerQuestList(player);
             }
         }
+        if (event.getView().getTitle().equalsIgnoreCase("퀘스트")) {
+            event.setCancelled(true); // 이벤트 취소하여 아이템을 메뉴로 옮기지 못하도록 함
+        }
     }
+
     public void resetPlayerQuestsAtSpecificTime() {
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             // 현재 시간을 가져옵니다.
@@ -297,19 +450,18 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             // 현재 시간을 분 단위로 변환합니다.
             SimpleDateFormat format = new SimpleDateFormat("HH:mm");
             String currentTime = format.format(now);
+            int currentHour = Integer.parseInt(currentTime.split(":")[0]);
             int currentMinute = Integer.parseInt(currentTime.split(":")[1]);
 
             // 00:00에서 00:01 사이인지 확인합니다.
             if (currentMinute >= 0 && currentMinute < 1) {
-                resetPlayerQuestFile();
+                resetAllPlayersDaily_QuestFile();
+            }
+            if ((currentMinute >= 0 && currentMinute < 1)&&currentHour == 0) {
+                resetAllPlayersWeekly_QuestFile();
             }
         }, 0L, 20 * 60L); // 1분(60초)마다 작업을 실행합니다.
     }
-
-
-
-
-
 
     public void resetPlayerQuestFile() {
         File playerQuestFile = new File(getDataFolder(), "playerQuest.yml");
@@ -326,4 +478,53 @@ public final class QuestCreate extends JavaPlugin implements Listener {
             e.printStackTrace();
         }
     }
+    public void resetAllPlayersDaily_QuestFile() {
+        // 모든 플레이어에 대해 일일 퀘스트 삭제
+        for (String playerId : playerQuestConfig.getKeys(false)) {
+            UUID uuid = UUID.fromString(playerId);
+            resetPlayerDaily_QuestFile(playerQuestConfig, uuid);
+        }
+    }
+
+    public void resetPlayerDaily_QuestFile(FileConfiguration playerQuestConfig, UUID playerId) {
+        ConfigurationSection playerQuestSection = playerQuestConfig.getConfigurationSection(playerId.toString());
+        if (playerQuestSection != null) {
+            Set<String> keysToRemove = new HashSet<>();
+            for (String questId : playerQuestSection.getKeys(false)) {
+                if (questId.startsWith("daily_quest")) {
+                    keysToRemove.add(questId);
+                }
+            }
+            for (String key : keysToRemove) {
+                playerQuestSection.set(key, null);
+            }
+            savePlayerQuests();
+        }
+    }
+
+    public void resetAllPlayersWeekly_QuestFile() {
+        // 모든 플레이어에 대해 일일 퀘스트 삭제
+        for (String playerId : playerQuestConfig.getKeys(false)) {
+            UUID uuid = UUID.fromString(playerId);
+            resetPlayerDWeekly_QuestFile(playerQuestConfig, uuid);
+        }
+    }
+
+    public void resetPlayerDWeekly_QuestFile(FileConfiguration playerQuestConfig, UUID playerId) {
+        ConfigurationSection playerQuestSection = playerQuestConfig.getConfigurationSection(playerId.toString());
+        if (playerQuestSection != null) {
+            Set<String> keysToRemove = new HashSet<>();
+            for (String questId : playerQuestSection.getKeys(false)) {
+                if (questId.startsWith("weekly_quest")) {
+                    keysToRemove.add(questId);
+                }
+            }
+            for (String key : keysToRemove) {
+                playerQuestSection.set(key, null);
+            }
+            savePlayerQuests();
+        }
+    }
+
+
 }

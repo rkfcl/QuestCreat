@@ -2,3 +2,7 @@ name: QuestCreate
 version: '${project.version}'
 main: questcreate.questcreate.QuestCreate
 api-version: 1.19
+commands:
+  퀘스트초기화:
+    description: 퀘스트초기화
+    permission: myplugin.resetquest
