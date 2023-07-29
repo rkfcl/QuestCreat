@@ -81,8 +81,11 @@ public final class QuestCreate extends JavaPlugin implements Listener {
     }
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (command.getName().equalsIgnoreCase("퀘스트초기화")) {
-            resetPlayerQuestFile();
+        if (command.getName().equalsIgnoreCase("일일퀘스트초기화")) {
+            resetAllPlayersDaily_QuestFile();
+            return true;
+        }else if (command.getName().equalsIgnoreCase("주간퀘스트초기화")) {
+            resetAllPlayersWeekly_QuestFile();
             return true;
         }
         return false;
@@ -412,7 +415,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
 
     private int countItems(Inventory inventory, Material itemType) {
         int count = 0;
-        for (ItemStack itemStack : inventory.getContents()) {
+        for (ItemStack itemStack : inventory.getStorageContents()) {
             if (itemStack != null && itemStack.getType() == itemType) {
                 count += itemStack.getAmount();
             }

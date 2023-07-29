@@ -3,6 +3,9 @@ version: '${project.version}'
 main: questcreate.questcreate.QuestCreate
 api-version: 1.19
 commands:
-  퀘스트초기화:
+  일일퀘스트초기화:
+    description: 퀘스트초기화
+    permission: myplugin.resetquest
+  주간퀘스트초기화:
     description: 퀘스트초기화
     permission: myplugin.resetquest
