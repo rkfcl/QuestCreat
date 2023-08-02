@@ -19,9 +19,7 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,6 +34,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
     private List<Quest> questList;
     private List<Quest> weeklyQuestList;
     private static QuestCreate instance;
+    private Calendar serverShutdownTime;
 
     public static QuestCreate getInstance() {
         return instance;
@@ -44,9 +43,7 @@ public final class QuestCreate extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         getLogger().info("퀘스트 플러그인 작동");
-        resetPlayerQuestsAtSpecificTime();
-        // 플러그인 활성화 시에 실행될 로직
-        getServer().getPluginManager().registerEvents(this, this);
+
         questList = new ArrayList<>();
         weeklyQuestList = new ArrayList<>();
         questFile = new File(getDataFolder(), "quests.yml");
@@ -68,13 +65,40 @@ public final class QuestCreate extends JavaPlugin implements Listener {
         questConfig = YamlConfiguration.loadConfiguration(questFile);
         playerQuestConfig = YamlConfiguration.loadConfiguration(playerQuestFile);
 
+        // 서버 종료 시간 가져오기 (밀리초 단위로 변환된 시간을 다시 일반 시간 형식으로 변환)
+        long shutdownTimeMillis = playerQuestConfig.getLong("server_shutdown_time", 0L);
+        if (shutdownTimeMillis > 0L) {
+            serverShutdownTime = Calendar.getInstance();
+            serverShutdownTime.setTimeInMillis(shutdownTimeMillis);
+
+            // 서버 시작 시와 종료 시간이 다른 날짜인지, 시간만 바뀌었는지 확인하여 퀘스트 초기화
+            Calendar currentTime = Calendar.getInstance();
+            if (currentTime.get(Calendar.YEAR) != serverShutdownTime.get(Calendar.YEAR)
+                    || currentTime.get(Calendar.DAY_OF_YEAR) != serverShutdownTime.get(Calendar.DAY_OF_YEAR)) {
+                resetAllPlayersWeekly_QuestFile();
+                resetAllPlayersDaily_QuestFile();
+            } else if (currentTime.get(Calendar.HOUR_OF_DAY) != serverShutdownTime.get(Calendar.HOUR_OF_DAY)) {
+                resetAllPlayersDaily_QuestFile();
+            }
+        }
+
+        resetPlayerQuestsAtSpecificTime();
+        // 플러그인 활성화 시에 실행될 로직
+        getServer().getPluginManager().registerEvents(this, this);
+
         // 퀘스트 목록 초기화
         loadQuestList();
         instance = this;
     }
 
+
+
     @Override
     public void onDisable() {
+        // 서버 종료 시점의 시간 저장 (밀리초 단위로 변환)
+        long serverShutdownTime = System.currentTimeMillis();
+        playerQuestConfig.set("server_shutdown_time", serverShutdownTime);
+
         // 플러그인 비활성화 시에 실행될 로직
         getLogger().info("퀘스트 플러그인 종료");
         savePlayerQuests();
@@ -484,7 +508,13 @@ public final class QuestCreate extends JavaPlugin implements Listener {
     public void resetAllPlayersDaily_QuestFile() {
         // 모든 플레이어에 대해 일일 퀘스트 삭제
         for (String playerId : playerQuestConfig.getKeys(false)) {
-            UUID uuid = UUID.fromString(playerId);
+            UUID uuid;
+            try {
+                uuid = UUID.fromString(playerId);
+            } catch (IllegalArgumentException e) {
+                // 유효하지 않은 UUID 문자열일 경우 건너뜁니다.
+                continue;
+            }
             resetPlayerDaily_QuestFile(playerQuestConfig, uuid);
         }
     }
@@ -506,9 +536,15 @@ public final class QuestCreate extends JavaPlugin implements Listener {
     }
 
     public void resetAllPlayersWeekly_QuestFile() {
-        // 모든 플레이어에 대해 일일 퀘스트 삭제
+        // 모든 플레이어에 대해 주간 퀘스트 삭제
         for (String playerId : playerQuestConfig.getKeys(false)) {
-            UUID uuid = UUID.fromString(playerId);
+            UUID uuid;
+            try {
+                uuid = UUID.fromString(playerId);
+            } catch (IllegalArgumentException e) {
+                // 유효하지 않은 UUID 문자열일 경우 건너뜁니다.
+                continue;
+            }
             resetPlayerDWeekly_QuestFile(playerQuestConfig, uuid);
         }
     }
